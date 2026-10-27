@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#e20074">
+<title>HomeID-Etikett</title>
+<style>
+  :root{--bg:#f4f4f5;--card:#fff;--fg:#111;--mut:#5b5b66;--acc:#e20074;--ok:#0a7d32;--err:#b3261e;--line:#d4d4d8}
+  @media (prefers-color-scheme:dark){:root{--bg:#111114;--card:#1c1c21;--fg:#f2f2f4;--mut:#a1a1aa;--line:#33333a;--ok:#4ade80;--err:#f87171}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  main{max-width:520px;margin:0 auto;padding:16px}
+  h1{font-size:22px;margin:4px 0 16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+  .step{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin-bottom:10px}
+  button,.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:58px;border:0;border-radius:12px;font:600 18px/1 inherit;cursor:pointer}
+  .primary{background:var(--acc);color:#fff}
+  .primary:disabled{opacity:.35}
+  .secondary{background:transparent;color:var(--fg);border:2px solid var(--line);margin-top:10px}
+  input[type=text]{width:100%;min-height:58px;font:700 26px/1 ui-monospace,Consolas,monospace;letter-spacing:.2em;text-align:center;text-transform:uppercase;border:2px solid var(--line);border-radius:12px;background:var(--bg);color:var(--fg);padding:0 10px}
+  input[type=text]:focus{outline:none;border-color:var(--acc)}
+  .or{text-align:center;color:var(--mut);margin:12px 0;font-size:14px}
+  .msg{min-height:22px;margin-top:10px;font-size:15px}
+  .msg.ok{color:var(--ok)} .msg.err{color:var(--err)}
+  .label{display:flex;align-items:center;gap:14px;background:#fff;color:#000;border-radius:6px;padding:10px 14px;aspect-ratio:50/18;width:100%;border:1px dashed #999}
+  .label canvas{height:100%;aspect-ratio:1;image-rendering:pixelated}
+  .label .t{flex:1;text-align:center;font:400 clamp(16px,5vw,24px)/1.25 Arial,sans-serif}
+  .hint{font-size:14px;color:var(--mut);margin:10px 0 0}
+  .hist{list-style:none;margin:0;padding:0}
+  .hist li{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-family:ui-monospace,Consolas,monospace}
+  .hist li:first-child{border-top:0}
+  .hist button{width:auto;min-height:40px;padding:0 14px;font-size:15px;background:transparent;color:var(--acc);border:2px solid var(--line)}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<main>
+  <h1>HomeID-Etikett</h1>
+
+  <section class="card">
+    <div class="step">1 · HomeID</div>
+    <label class="btn primary" for="file">Telekom-Datei auswählen</label>
+    <input id="file" type="file" class="hide">
+    <div class="or">oder eintippen</div>
+    <input id="id" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="7" placeholder="0D6SQJQ">
+    <div id="msg" class="msg"></div>
+  </section>
+
+  <section class="card">
+    <div class="step">2 · Vorschau</div>
+    <div class="label"><canvas id="qr" width="29" height="29"></canvas><div class="t">Telekom Home-ID<br><b id="pv">–––––––</b></div></div>
+  </section>
+
+  <section class="card">
+    <div class="step">3 · Drucken</div>
+    <button id="dl" class="primary" disabled>Etikett-Datei erstellen</button>
+    <button id="sh" class="secondary hide" disabled>Teilen mit iPrint&amp;Label</button>
+    <p class="hint">Danach die heruntergeladene Datei antippen → <b>Öffnen mit iPrint&amp;Label</b> → Drucken.</p>
+  </section>
+
+  <section class="card" id="histCard">
+    <div class="step">Zuletzt erstellt</div>
+    <ul id="hist" class="hist"></ul>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+/* Vorlage aus iPrint&Label (Gf-TA Home-ID Vorlage.lbx), Platzhalter {{ID}} / {{LEN}} */
+const LABEL_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<pt:document xmlns:pt="http://schemas.brother.info/ptouch/2007/lbx/main" xmlns:style="http://schemas.brother.info/ptouch/2007/lbx/style" xmlns:text="http://schemas.brother.info/ptouch/2007/lbx/text" xmlns:draw="http://schemas.brother.info/ptouch/2007/lbx/draw" xmlns:image="http://schemas.brother.info/ptouch/2007/lbx/image" xmlns:barcode="http://schemas.brother.info/ptouch/2007/lbx/barcode" xmlns:database="http://schemas.brother.info/ptouch/2007/lbx/database" xmlns:table="http://schemas.brother.info/ptouch/2007/lbx/table" xmlns:cable="http://schemas.brother.info/ptouch/2007/lbx/cable" version="1.10" generator="iPrintAndLabel"><pt:body currentSheet="Blatt 1" direction="LTR"><style:sheet name="Blatt 1"><style:paper media="0" width="51.2pt" height="141.6pt" marginLeft="3.2pt" marginTop="5.6pt" marginRight="3.2pt" marginBottom="5.6pt" orientation="landscape" autoLength="false" monochromeDisplay="true" printColorDisplay="false" printColorsID="0" paperColor="#FFFFFF" paperInk="#000000" split="1" format="260" backgroundTheme="0" printerID="30256" printerName="Brother PT-P710BT"></style:paper><style:cutLine regularCut="0pt" freeCut=""></style:cutLine><style:backGround x="5.6pt" y="3.2pt" width="130.4pt" height="44.8pt" brushStyle="NULL" brushId="0" userPattern="NONE" userPatternId="0" color="#000000" printColorNumber="1" backColor="#FFFFFF" backPrintColorNumber="0"></style:backGround><pt:objects><barcode:barcode><pt:objectStyle x="7.6pt" y="5.2pt" width="40pt" height="40pt" backColor="#FFFFFF" backPrintColorNumber="0" ropMode="COPYPEN" angle="0" anchor="TOPLEFT" flip="NONE"><pt:pen style="INSIDEFRAME" widthX="0.5pt" widthY="0.5pt" color="#000000" printColorNumber="1"></pt:pen><pt:brush style="NULL" color="#000000" printColorNumber="1" id="0"></pt:brush><pt:expanded objectName="Barcode2" ID="0" lock="0" templateMergeTarget="LABELLIST" templateMergeType="NONE" templateMergeID="0" allowOutOfBoundsTransfer="false" linkStatus="NONE" linkID="0"></pt:expanded></pt:objectStyle><barcode:barcodeStyle protocol="QRCODE" lengths="48" zeroFill="false" barWidth="1.2pt" barRatio="1:3" humanReadable="true" humanReadableAlignment="LEFT" checkDigit="false" autoLengths="true" margin="true" sameLengthBar="false" bearerBar="false"></barcode:barcodeStyle><barcode:qrcodeStyle model="2" eccLevel="15%" cellSize="1.6pt" mbcs="65001" joint="1" version="auto"></barcode:qrcodeStyle><pt:data>{{ID}}</pt:data></barcode:barcode><text:text><pt:objectStyle x="47.6pt" y="3.2pt" width="88.4pt" height="44.8pt" backColor="#FFFFFF" backPrintColorNumber="0" ropMode="COPYPEN" angle="0" anchor="TOPLEFT" flip="NONE"><pt:pen style="NULL" widthX="0.5pt" widthY="0.5pt" color="#000000" printColorNumber="1"></pt:pen><pt:brush style="NULL" color="#000000" printColorNumber="1" id="0"></pt:brush><pt:expanded objectName="Text3" ID="0" lock="0" templateMergeTarget="LABELLIST" templateMergeType="NONE" templateMergeID="0" allowOutOfBoundsTransfer="false" linkStatus="NONE" linkID="0"></pt:expanded></pt:objectStyle><text:ptFontInfo><text:logFont name="Arial" width="0" italic="false" weight="400" charSet="0" pitchAndFamily="2"></text:logFont><text:fontExt effect="NOEFFECT" underline="0" strikeout="0" size="10pt" orgSize="28.8pt" textColor="#000000" textPrintColorNumber="1"></text:fontExt></text:ptFontInfo><text:textControl control="LONGTEXTFIXED" clipFrame="false" aspectNormal="true" shrink="true" autoLF="true" avoidImage="false"></text:textControl><text:textAlign horizontalAlignment="CENTER" verticalAlignment="TOP" inLineAlignment="BASELINE"></text:textAlign><text:textStyle vertical="false" nullBlock="false" charSpace="0" lineSpace="0" orgPoint="10pt" combinedChars="false"></text:textStyle><text:transferSettings editOnPrintFormat="" editOnPrintOrder="481181696"></text:transferSettings><pt:data>
+Telekom Home-ID
+{{ID}}</pt:data><text:stringItem charLen="1"><text:ptFontInfo><text:logFont name="Arial" width="0" italic="false" weight="400" charSet="0" pitchAndFamily="2"></text:logFont><text:fontExt effect="NOEFFECT" underline="0" strikeout="0" size="10pt" orgSize="28.8pt" textColor="#000000" textPrintColorNumber="1"></text:fontExt></text:ptFontInfo></text:stringItem><text:stringItem charLen="15"><text:ptFontInfo><text:logFont name="Arial" width="0" italic="false" weight="400" charSet="0" pitchAndFamily="2"></text:logFont><text:fontExt effect="NOEFFECT" underline="0" strikeout="0" size="10pt" orgSize="28.8pt" textColor="#000000" textPrintColorNumber="1"></text:fontExt></text:ptFontInfo></text:stringItem><text:stringItem charLen="1"><text:ptFontInfo><text:logFont name="Arial" width="0" italic="false" weight="400" charSet="0" pitchAndFamily="2"></text:logFont><text:fontExt effect="NOEFFECT" underline="0" strikeout="0" size="10pt" orgSize="28.8pt" textColor="#000000" textPrintColorNumber="1"></text:fontExt></text:ptFontInfo></text:stringItem><text:stringItem charLen="{{LEN}}"><text:ptFontInfo><text:logFont name="Arial" width="0" italic="false" weight="400" charSet="0" pitchAndFamily="2"></text:logFont><text:fontExt effect="NOEFFECT" underline="0" strikeout="0" size="10pt" orgSize="28.8pt" textColor="#000000" textPrintColorNumber="1"></text:fontExt></text:ptFontInfo></text:stringItem></text:text></pt:objects></style:sheet></pt:body></pt:document>
+`;
+const PROP_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<meta:properties xmlns:meta="http://schemas.brother.info/ptouch/2007/lbx/meta" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/"><meta:appName>iPrintAndLabel</meta:appName><dc:title></dc:title><dc:subject></dc:subject><dc:creator></dc:creator><meta:keyword></meta:keyword><dc:description></dc:description><meta:template></meta:template><dcterms:created>2026-10-27T17:41:06Z</dcterms:created><dcterms:modified>2026-10-27T17:48:29Z</dcterms:modified><meta:lastPrinted></meta:lastPrinted><meta:modifiedBy></meta:modifiedBy><meta:revision>34</meta:revision><meta:editTime>0</meta:editTime><meta:numPages>1</meta:numPages><meta:numWords>0</meta:numWords><meta:numChars>0</meta:numChars><meta:security>0</meta:security><meta:transferScript></meta:transferScript></meta:properties>
+`;
+
+const $ = s => document.querySelector(s);
+const idIn = $('#id'), msg = $('#msg'), dl = $('#dl'), sh = $('#sh');
+const ID_RE = /^[0-9A-Z]{7}$/;
+
+function setMsg(t, cls){ msg.textContent = t; msg.className = 'msg ' + (cls||''); }
+
+/* ---------- HomeID aus Telekom-Datei lesen ---------- */
+function extractId(text, filename){
+  const m = /fiber\s*id\s*[:=]\s*([0-9A-Za-z]+)/i.exec(text || '');
+  if (m) return m[1].toUpperCase();
+  const t = (text || '').trim();
+  if (/^[0-9A-Za-z]{7}$/.test(t)) return t.toUpperCase();
+  const f = /([0-9A-Za-z]{7})(?:\s*\(\d+\))?\.lbx$/i.exec(filename || '');
+  return f ? f[1].toUpperCase() : null;
+}
+
+$('#file').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  let text = '';
+  try { if (f.size < 4096) text = await f.text(); } catch(_){}
+  const id = extractId(text, f.name);
+  e.target.value = '';
+  if (!id){ setMsg('In der Datei wurde keine HomeID gefunden.', 'err'); return; }
+  idIn.value = id; update(true);
+});
+idIn.addEventListener('input', () => {
+  idIn.value = idIn.value.toUpperCase().replace(/[^0-9A-Z]/g,'');
+  update(false);
+});
+
+/* ---------- Vorschau ---------- */
+function drawQR(id){
+  const c = $('#qr'), ctx = c.getContext('2d');
+  if (!id || typeof qrcode === 'undefined'){ ctx.clearRect(0,0,c.width,c.height); return; }
+  const q = qrcode(0, 'M'); q.addData(id); q.make();
+  const n = q.getModuleCount(); c.width = c.height = n;
+  ctx.fillStyle = '#fff'; ctx.fillRect(0,0,n,n); ctx.fillStyle = '#000';
+  for (let r=0;r<n;r++) for (let k=0;k<n;k++) if (q.isDark(r,k)) ctx.fillRect(k,r,1,1);
+}
+function update(fromFile){
+  const id = idIn.value, ok = ID_RE.test(id);
+  $('#pv').textContent = id || '–––––––';
+  drawQR(ok ? id : '');
+  dl.disabled = sh.disabled = !ok;
+  if (ok) setMsg((fromFile ? 'HomeID aus Datei übernommen: ' : 'HomeID gültig: ') + id, 'ok');
+  else if (id.length) setMsg('HomeID muss genau 7 Zeichen haben (' + id.length + '/7).', 'err');
+  else setMsg('');
+}
+
+/* ---------- ZIP (.lbx) erzeugen ---------- */
+const CRC = (() => { const t = new Uint32Array(256); for (let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(b){ let c = 0xFFFFFFFF; for (let i=0;i<b.length;i++) c = CRC[(c^b[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+async function deflate(b){
+  if (typeof CompressionStream === 'undefined') return null;
+  try { return new Uint8Array(await new Response(new Blob([b]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer()); }
+  catch(_){ return null; }
+}
+async function makeZip(files){
+  const d = new Date();
+  const dt = ((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();
+  const tm = (d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1);
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  for (const [name, text] of files){
+    const nm = enc.encode(name), raw = enc.encode(text), crc = crc32(raw);
+    const def = await deflate(raw), data = def || raw, method = def ? 8 : 0;
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,method,true);
+    h.setUint16(10,tm,true); h.setUint16(12,dt,true); h.setUint32(14,crc,true);
+    h.setUint32(18,data.length,true); h.setUint32(22,raw.length,true); h.setUint16(26,nm.length,true); h.setUint16(28,0,true);
+    parts.push(new Uint8Array(h.buffer), nm, data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(10,method,true);
+    c.setUint16(12,tm,true); c.setUint16(14,dt,true); c.setUint32(16,crc,true); c.setUint32(20,data.length,true); c.setUint32(24,raw.length,true);
+    c.setUint16(28,nm.length,true); c.setUint32(42,off,true);
+    central.push(new Uint8Array(c.buffer), nm);
+    off += 30 + nm.length + data.length;
+  }
+  const cdSize = central.reduce((s,p)=>s+p.length,0);
+  const e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true);
+  e.setUint32(12,cdSize,true); e.setUint32(16,off,true);
+  return new Blob([...parts, ...central, new Uint8Array(e.buffer)], {type:'application/octet-stream'});
+}
+let SHARE_TYPE = 'application/octet-stream';
+async function buildLbx(id, type = 'application/octet-stream'){
+  const label = LABEL_XML.replaceAll('{{ID}}', id).replace('{{LEN}}', String(id.length));
+  const now = new Date().toISOString().replace(/\.\d+Z$/,'Z');
+  const prop = PROP_XML.replace(/<dcterms:modified>[^<]*</, '<dcterms:modified>'+now+'<');
+  const blob = await makeZip([['label.xml', label], ['prop.xml', prop]]);
+  return new File([blob], 'HomeID_' + id + '.lbx', {type});
+}
+
+/* ---------- Ausgabe ---------- */
+dl.addEventListener('click', async () => {
+  const id = idIn.value; if (!ID_RE.test(id)) return;
+  const f = await buildLbx(id);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+  remember(id); setMsg('Datei ' + f.name + ' erstellt – jetzt antippen und mit iPrint&Label öffnen.', 'ok');
+});
+sh.addEventListener('click', async () => {
+  const id = idIn.value; if (!ID_RE.test(id)) return;
+  const f = await buildLbx(id, SHARE_TYPE);
+  try { await navigator.share({files:[f], title:'HomeID ' + id}); remember(id); }
+  catch(err){ if (err.name !== 'AbortError') setMsg('Teilen nicht möglich – bitte „Etikett-Datei erstellen“ nutzen.', 'err'); }
+});
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+(async () => {   /* Teilen-Knopf zeigen, wenn das Handy .lbx-Dateien teilen kann (iPhone: Hauptweg) */
+  if (!navigator.share) return;
+  for (const t of ['application/octet-stream', 'application/zip', '']) {
+    try { const f = await buildLbx('0000000', t); if (navigator.canShare && navigator.canShare({files:[f]})) { SHARE_TYPE = t; show(); return; } } catch(_){}
+  }
+  if (IOS) show();   /* iOS meldet canShare teils falsch – trotzdem anbieten */
+  function show(){
+    sh.classList.remove('hide');
+    if (IOS) {       /* auf dem iPhone Teilen als Hauptknopf */
+      sh.className = 'primary'; sh.textContent = 'Teilen → iPrint&Label';
+      dl.className = 'secondary'; dl.textContent = 'Nur herunterladen';
+      dl.parentNode.insertBefore(sh, dl);
+      document.querySelector('.hint').innerHTML = 'Im Teilen-Menü <b>iPrint&amp;Label</b> wählen (ggf. unter „Mehr“) → Drucken.';
+    }
+  }
+})();
+
+/* ---------- Verlauf (nur auf diesem Handy) ---------- */
+const KEY = 'homeid-verlauf';
+function loadHist(){ try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch(_){ return []; } }
+function remember(id){
+  const h = [{id, t: Date.now()}, ...loadHist().filter(x => x.id !== id)].slice(0,10);
+  try { localStorage.setItem(KEY, JSON.stringify(h)); } catch(_){}
+  renderHist(h);
+}
+function renderHist(h = loadHist()){
+  $('#histCard').classList.toggle('hide', !h.length);
+  $('#hist').innerHTML = h.map(x => '<li><span>' + x.id + ' <small style="color:var(--mut)">' +
+    new Date(x.t).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) +
+    '</small></span><button data-id="' + x.id + '">Übernehmen</button></li>').join('');
+}
+$('#hist').addEventListener('click', e => { const id = e.target.dataset && e.target.dataset.id; if (id){ idIn.value = id; update(false); window.scrollTo({top:0,behavior:'smooth'}); } });
+renderHist(); update(false);
+</script>
+</body>
+</html>
