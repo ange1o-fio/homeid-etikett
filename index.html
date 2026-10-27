@@ -187,7 +187,12 @@ sh.addEventListener('click', async () => {
 const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 (async () => {   /* Teilen-Knopf zeigen, wenn das Handy .lbx-Dateien teilen kann (iPhone: Hauptweg) */
   if (!navigator.share) return;
-  for (const t of ['application/octet-stream', 'application/zip', '']) {
+  /* iPhone: ohne MIME-Typ teilen, damit iOS den Typ über die Endung .lbx erkennt (iPrint&Label erscheint nur dann) */
+  const forced = new URLSearchParams(location.search).get('typ');   /* Test: ?typ=zip | bin | leer */
+  const order = forced ? [{zip:'application/zip', bin:'application/octet-stream', leer:''}[forced] ?? '']
+              : IOS ? ['', 'application/octet-stream', 'application/zip'] : ['application/octet-stream', 'application/zip', ''];
+  if (IOS || forced) SHARE_TYPE = order[0];
+  for (const t of order) {
     try { const f = await buildLbx('0000000', t); if (navigator.canShare && navigator.canShare({files:[f]})) { SHARE_TYPE = t; show(); return; } } catch(_){}
   }
   if (IOS) show();   /* iOS meldet canShare teils falsch – trotzdem anbieten */
